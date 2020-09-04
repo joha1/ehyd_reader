@@ -1,4 +1,6 @@
-examples/downloads/
-examples/__pycache__/
-examples/.ipynb_checkpoints/
-examples/ehyd_reader.py
+#examples/downloads/
+#examples/__pycache__/
+#examples/.ipynb_checkpoints/
+#examples/ehyd_reader.py
+examples/
+!examples/*.ipynb
