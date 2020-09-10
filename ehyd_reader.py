@@ -2,26 +2,45 @@
 
 
 def ehyd_reader(filename, output_type, write_csv='False',
-                  interpolate='False'):
+                input_type='csv', interpolate='False'):
     """
     Reads in a CSV file containing a hydrologic time series (filename).
+    
     Meant to be used with files obtained from ehyd.gv.at, taking into
     account the intricacies of this data (ISO 8859-15 file, use of
     german Umlauts, using the term "Lücke" for NaN, decimal comma).
+    
+    Can also read in .dat files, which get used internally in the
+    governement agencies. Those follow the same format as the csv files
+    but use a decimal dot and variable spaces as delimiter. Note that 
+    these files can have very irregular measurements, so handling these
+    is still experimental!
+    
     Use 'dict' or 'df' to specify wether you want a dict or dataframe as
     output.
+    
     If you want a "proper" CSV file in your working directory, use
     "write_csv=True".
+    
     Set interpolate to 'True' if you want to interpolate over missing
     data. For small gaps, this should be OK, but if 'DataError'
     indicates a lot of missing data, this is probably going to cause
     issues when further handling the data.
+    
+    Use example:
+    # Read in a csv file and output a dataframe:
+    ehyd_df = ehyd_reader('filename.csv', output_type='df')
+    # Read in a dat file and output a dictionary and a csv file:
+    ehyd_dict = ehyd_reader('filename.dat', output_type='dict', 
+                            input_type='dat', write_csv='True')    
+    
     """
 
     # Import the needed modules.
     import pandas as pd
     import numpy as np
     import os
+    import re
     from sklearn.metrics.pairwise import haversine_distances
     from math import radians
     # The last two imports are needed to figure out how much the station moved
@@ -30,23 +49,37 @@ def ehyd_reader(filename, output_type, write_csv='False',
 
     # A lot of metadata start with ';' and end with a newline.
     # Lets define a little function for that.
-    def splitter(tester):
+    def csv_splitter(tester):
         start_str = tester.find(';')+1
         end_str = tester.find('\n')
         t_str = tester[start_str:end_str]
         return t_str
+    def dat_splitter(tester):
+        start_str = tester.find(':')+1
+        end_str = tester.find('\n')
+        t_str = tester[start_str:end_str].lstrip()
+        return t_str
+    if input_type == 'dat':
+        splitter = dat_splitter
+    else:
+        splitter = csv_splitter
 
     # define a long-ish function to read the coordinates,
     # needed twice, later
     def coord_calculator(RawCoords):
         nonlocal MetaError
         Coordstring = str(RawCoords)
-        Longitudestart = Coordstring.find(';')+1
-        Longitudeend = Coordstring.rfind(';')-1
-        Latitudestart = Coordstring.rfind(';')+1
-        Latitudeend = Coordstring.find('\n')
-        raw_Longitude = Coordstring[Longitudestart:Longitudeend]
-        raw_Latitude = Coordstring[Latitudestart:Latitudeend]
+        if input_type == 'dat':
+            Coordlist = re.findall(r"\d{2}\s\d{2}\s\d{2}",Coordstring)
+            raw_Longitude = Coordlist[0]
+            raw_Latitude = Coordlist[1]
+        else:
+            Longitudestart = Coordstring.find(';')+1
+            Longitudeend = Coordstring.rfind(';')-1
+            Latitudestart = Coordstring.rfind(';')+1
+            Latitudeend = Coordstring.find('\n')
+            raw_Longitude = Coordstring[Longitudestart:Longitudeend]
+            raw_Latitude = Coordstring[Latitudestart:Latitudeend]
         # Remove trailing whitespace.
         stripped_Lon = raw_Longitude.rstrip()
         stripped_Lat = raw_Latitude.rstrip()
@@ -273,9 +306,11 @@ def ehyd_reader(filename, output_type, write_csv='False',
                 elev = 'NaN'
             else:
                 elev = float(elev)
+        if 'Pegelnullpunkt' in tester and datatype == 'Spring' and elev == 'NaN':
+            elev = tester.replace(",", ".")
+            elev = splitter(elev)
+            elev = float(elev)
         if 'Pegelnullpunkt' in tester and datatype == 'Riverwater':
-            # This fails for precipitation, because they have the data 2 lines
-            # below, whereas springs have it afterwards.
             elev = str(table[header_counter+2])
             elev = elev.replace(",", ".")
             elev = splitter(elev)
@@ -283,6 +318,21 @@ def ehyd_reader(filename, output_type, write_csv='False',
                 elev = 'NaN'
             else:
                 elev = float(elev)
+        if 'Höhe:' in tester:# and datatype == 'Precipitation':
+            # Should also test for datatype, but this fails.
+            # Seems like 'Höhe:' only gets used in precip, but a test would
+            # still be nice.
+            elev = str(table[header_counter+2])
+            elev = elev.replace(",", ".")
+            elev = splitter(elev)
+            if elev == '':
+                elev = 'NaN'
+            else:
+                elev = float(elev)
+        # Can also have a lot of different values if the station moved. 
+        # Still missing something to detect that and to give info about changes 
+        # station location. Uses the first value it finds. Will probably not
+        # be totally wrong, but isn't the most recent value.
         if 'Werte:' in tester:
             WerteStart = header_counter
             # Finds the line where the data starts
@@ -296,9 +346,16 @@ def ehyd_reader(filename, output_type, write_csv='False',
     else:
         teufe = 'NaN'
 
+    if input_type == 'dat':
+        seperator = '\s{2,10}'
+        deci = '.'
+    else:
+        seperator = '\s*\;\s*'
+        deci = ','
+
     hydroTS = pd.read_csv(current_csv,
-                          skiprows=WerteStart+1, decimal=',',  
-                          sep='\s*\;\s*', usecols=[0, 1], index_col=0,
+                          skiprows=WerteStart+1, decimal=deci,  
+                          sep=seperator, usecols=[0, 1], index_col=0,
                           dayfirst=True, parse_dates=True, engine='python',
                           encoding='cp1252', names=['date', 'level'],
                           na_values='Lücke')
@@ -358,14 +415,18 @@ def ehyd_reader(filename, output_type, write_csv='False',
         else:
             TS_freq = 'MS'
             #hydroTS = hydroTS.asfreq(TS_freq)
-            print('Station', HZB, 'has irregular measurement times! \n',
+            print('Station', HZB, 'has irregular monthly times! \n',
                   'Check the index before doing calculations on it.')
             DataError = 'Irregular_measure_times_M'
 
     else:
         TS_freq = 'D'
-        #hydroTS = hydroTS.asfreq(TS_freq)
-        print('Station', HZB, 'has irregular measurement times! \n',
+        if input_type == 'dat':
+            hydroTS = hydroTS.resample(TS_freq).mean()
+            print('Station', HZB, 'has multiples measurements per day. \n',
+              'Resampled to daily.')
+        else:
+            print('Station', HZB, 'has irregular measurement times! \n',
               'Check the index before doing calculations on it.')
         DataError = 'Irregular_measure_times_D'
     # The commented out
@@ -386,15 +447,16 @@ def ehyd_reader(filename, output_type, write_csv='False',
     lengthdifference = testlength - Rlength
 
     if lengthdifference != 0:
-        hydroTS = hydroTS[~hydroTS.index.duplicated()]
-        # Get rid of duplicate entries, keeping the first one. For data that 
-        # has many measurements per day, this is not a good idea. ehyd data
-        # should have only one per day, so this deals with some rare errors,
-        # but for the raw data, this can be problematic.
-        # the ~ is apparently a reversal of the booleans in that duplicated.
-        # see
-        # https://stackoverflow.com/questions/13035764/remove-rows-with-duplicate-indices-pandas-dataframe-and-timeseries
-        print('Two measurements at one day. first measurement deleted')
+        if input_type == 'csv':
+            hydroTS = hydroTS[~hydroTS.index.duplicated()]
+            # Get rid of duplicate entries, keeping the first one. For data that 
+            # has many measurements per day, this is not a good idea. ehyd data
+            # should have only one per day, so this deals with some rare errors,
+            # but for the raw data, this can be problematic.
+            # the ~ is apparently a reversal of the booleans in that duplicated.
+            # see
+            # https://stackoverflow.com/questions/13035764/remove-rows-with-duplicate-indices-pandas-dataframe-and-timeseries
+            print('Two measurements at one day. first measurement deleted')
         DataError = 'Doublemeasurement'
     if lengthdifference > 4:
         # Apparently, there is some issues around 1945 (war?) where total
