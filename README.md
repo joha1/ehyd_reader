@@ -24,6 +24,12 @@ While [ehyd](https://ehyd.gv.at/) offers a great wealth of data over all of Aust
 Hence, all the examples start with a download of the data.
 Further, this downloads have to happen by clicking around on the [ehyd](https://ehyd.gv.at/) website, or by grabbing specific wells with urlreader, since the [ehyd](https://ehyd.gv.at/) website does not offer an api for downloading the data.
 
+## `.dat` files
+
+`ehyd_reader` also supports the option `input_type='dat'` to read in space-separated `.dat` files, used as the basis for the homogenized csv files available on ehyd.
+Since these files can have very irregular measurements, merging them into large dataframes can fail.
+Thus, support for dat files is still considered experimental.
+
 
 
 
