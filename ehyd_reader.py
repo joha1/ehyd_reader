@@ -30,7 +30,7 @@ def ehyd_reader(filename, output_type, write_csv='False',
     Parameters
     ----------
     filename : str
-        path to the file to be read
+        path to and name of the file to be read
     output_type : str
         can be 'df' for a dataframe as output or 'dict" for a dictionary
     write_csv : bool
