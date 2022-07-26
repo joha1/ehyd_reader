@@ -35,7 +35,7 @@ Thus, support for dat files is still considered experimental.
 
 ## Examples
 
-For some examples of what can be done based on `ehyd_reader`, check out [Haas and Birk (2019)](https://doi.org/10.1016/j.ejrh.2019.100597), looking at trends in Austrian groundwater levels.
+For some examples of what can be done based on `ehyd_reader`, check out [Haas and Birk (2019)](https://doi.org/10.1016/j.ejrh.2019.100597), looking at trends in Austrian groundwater levels and [Haas et al. (2018)](https://doi.org/10.1007/s12665-018-7469-4) for the work leading to this `ehyd_reader` and some more applications.
 
 For some more hands-on examples on how to use `ehyd_reader` for your own work, check out the Jupyter notebooks containing some working examples on what you can do with `ehyd_reader` and how to do it in the [examples](https://github.com/joha1/ehyd_reader/tree/master/examples) folder.
 
